@@ -1,21 +1,25 @@
-import type { Metadata } from "next";
-import "./globals.css";
+"use client";
 
-export const metadata: Metadata = {
-  title: "ログ解析システム",
-  description: "DuckDB WASMログ解析システム",
-};
+import "./globals.css";
+import { useEffect } from "react";
+import { configureAmplify } from "@/lib/amplify-config";
 
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  useEffect(() => {
+    configureAmplify();
+  }, []);
+
   return (
     <html lang="ja">
-      <body className="antialiased">
-        {children}
-      </body>
+      <head>
+        <title>ログ解析システム</title>
+        <meta name="description" content="DuckDB WASMログ解析システム" />
+      </head>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

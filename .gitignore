@@ -44,3 +44,8 @@ next-env.d.ts
 # IDE
 .vscode/
 .idea/
+
+# Amplify
+amplify_outputs.json
+.amplify/
+amplify/data/resource.generated.ts
