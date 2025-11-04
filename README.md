@@ -125,7 +125,7 @@ npm run format
 
 ## 開発フェイズ
 
-現在の進捗: **フェイズ0 完了** ✅
+現在の進捗: **フェイズ1 完了** ✅
 
 ### 完了したフェイズ
 
@@ -136,14 +136,22 @@ npm run format
   - Tailwind CSS設定（カスタムカラー含む）
   - Git初期化
 
+- [x] **フェイズ1: AWS基盤構築** (2-3日)
+  - Amplify Gen 2セットアップ
+  - Cognito認証設定（4つのグループ定義）
+  - S3ストレージ設定（チームベースアクセス制御）
+  - Bedrockポリシー追加
+  - 環境変数テンプレート作成
+  - AWS設定ガイド作成
+
 ### 次のフェイズ
 
-- [ ] **フェイズ1: AWS基盤構築** (2-3日)
-  - Amplify Gen 2セットアップ
-  - Cognito認証設定
-  - S3バケット作成
-  - CloudFront設定
-  - Bedrock設定
+- [ ] **フェイズ2: 認証機能実装** (2-3日)
+  - Amplify認証統合
+  - 認証UI実装
+  - 保護ルート実装
+  - ユーザー情報取得
+  - ログアウト機能
 
 詳細は [implementation_plan.md](docs/implementation_plan.md) を参照してください。
 
@@ -153,6 +161,7 @@ npm run format
 - [インターフェース仕様](docs/interface.md) - 画面設計、UI/UX仕様
 - [エラーハンドリング仕様](docs/error_docs.md) - エラーコード、エラー表示
 - [実装計画書](docs/implementation_plan.md) - フェイズ別実装計画
+- [AWS設定ガイド](docs/aws_setup_guide.md) - AWSインフラのセットアップ手順
 
 ## カスタムカラー
 
