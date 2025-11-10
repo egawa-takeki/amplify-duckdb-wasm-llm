@@ -1,4 +1,5 @@
 import { defineBackend } from "@aws-amplify/backend";
+import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { auth } from "./auth/resource";
 import { storage } from "./storage/resource";
 
@@ -15,31 +16,29 @@ const backend = defineBackend({
 });
 
 // Bedrock用のIAMポリシーを追加
-const bedrockPolicy = {
-  Effect: "Allow",
-  Action: ["bedrock:InvokeModel"],
-  Resource: [
-    "arn:aws:bedrock:*::foundation-model/anthropic.claude-3-5-sonnet-*",
+// Amazon Nova Proの推論プロファイルを使用
+const bedrockPolicy = new PolicyStatement({
+  actions: ["bedrock:InvokeModel"],
+  resources: [
+    // 推論プロファイル用のARN形式
+    "arn:aws:bedrock:*:*:inference-profile/us.amazon.nova-pro-v1:0",
+    // 基盤モデルへの直接アクセス用（フォールバック）
+    "arn:aws:bedrock:*::foundation-model/amazon.nova-pro-*",
   ],
-};
+});
 
 // S3 Signed URL生成用の権限を追加
-const s3Policy = {
-  Effect: "Allow",
-  Action: ["s3:GetObject", "s3:ListBucket"],
-  Resource: [
-    `${backend.storage.resources.bucket.bucketArn}`,
+const s3Policy = new PolicyStatement({
+  actions: ["s3:GetObject", "s3:ListBucket"],
+  resources: [
+    backend.storage.resources.bucket.bucketArn,
     `${backend.storage.resources.bucket.bucketArn}/*`,
   ],
-};
+});
 
 // 認証済みユーザーのロールにポリシーを追加
-backend.auth.resources.authenticatedUserIamRole.attachInlinePolicy({
-  name: "bedrock-access",
-  policy: bedrockPolicy,
-});
+backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(
+  bedrockPolicy
+);
 
-backend.auth.resources.authenticatedUserIamRole.attachInlinePolicy({
-  name: "s3-signed-url",
-  policy: s3Policy,
-});
+backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(s3Policy);

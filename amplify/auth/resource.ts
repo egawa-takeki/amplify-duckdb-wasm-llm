@@ -20,17 +20,9 @@ export const auth = defineAuth({
     },
   },
   groups: ["team-alpha", "team-beta", "team-gamma", "team-admin"],
-  accountRecovery: "EMAIL",
-  passwordPolicy: {
-    minLength: 8,
-    requireLowercase: true,
-    requireUppercase: true,
-    requireNumbers: true,
-    requireSymbols: true,
-  },
-  mfa: {
+  accountRecovery: "EMAIL_ONLY",
+  multifactor: {
     mode: "OPTIONAL",
-    sms: false,
     totp: true,
   },
 });
