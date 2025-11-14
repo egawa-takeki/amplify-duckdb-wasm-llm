@@ -9,11 +9,13 @@ import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { QueryInput } from "@/components/QueryInput";
 import { SqlDisplay } from "@/components/SqlDisplay";
 import { QueryResultTable } from "@/components/QueryResultTable";
+import { ChartViewer } from "@/components/charts/ChartViewer";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Toast } from "@/components/ui/Toast";
 import { generateSqlWithBedrock } from "@/lib/bedrock";
 import { generateSignedUrls } from "@/lib/s3-utils";
+import { exportQueryResultAsCSV } from "@/lib/csv-export";
 
 /**
  * ダッシュボードページ
@@ -400,7 +402,35 @@ export default function DashboardPage() {
               {/* クエリ結果表示エリア */}
               {queryResult && (
                 <div className="mb-6">
-                  <QueryResultTable
+                  <div className="flex justify-end mb-3">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() =>
+                        exportQueryResultAsCSV(
+                          queryResult.columns,
+                          queryResult.rows,
+                        )
+                      }
+                    >
+                      <svg
+                        className="w-4 h-4 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                      CSVエクスポート
+                    </Button>
+                  </div>
+
+                  <ChartViewer
                     columns={queryResult.columns}
                     rows={queryResult.rows}
                     totalRows={queryResult.totalRows}
@@ -410,16 +440,6 @@ export default function DashboardPage() {
 
               {/* プレースホルダーエリア */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    📊 グラフ表示エリア
-                  </h3>
-                  <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg h-64 flex items-center justify-center">
-                    <p className="text-gray-500">
-                      Phase 6で実装: Rechartsグラフ
-                    </p>
-                  </div>
-                </Card>
 
                 <Card>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">
