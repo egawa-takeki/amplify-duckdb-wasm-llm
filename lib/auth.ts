@@ -8,7 +8,8 @@ export interface UserInfo {
   username: string;
   email?: string;
   groups: string[];
-  teamId: string | null;
+  teamId: string | null; // 後方互換性のため残す（非推奨）
+  availableTeams: string[]; // ユーザーがアクセス可能なチーム一覧
 }
 
 /**
@@ -24,17 +25,42 @@ export async function getUserInfo(): Promise<UserInfo | null> {
       (session.tokens?.accessToken?.payload["cognito:groups"] as string[]) ||
       [];
 
-    // team_idの特定（team-admin以外の最初のグループ）
-    const teamId =
-      groups.find(
-        (g) => g.startsWith("team-") && g !== "team-admin"
-      ) || null;
+    // デバッグ用ログ
+    console.log("User info debug:", {
+      username: user.username,
+      groups,
+      accessTokenPayload: session.tokens?.accessToken?.payload,
+    });
+
+    // アクセス可能なチーム一覧を取得（team-adminは除外）
+    const availableTeams = groups.filter(
+      (g) => g.startsWith("team-") && g !== "team-admin"
+    );
+
+    // team-adminの場合は全チームにアクセス可能
+    if (groups.includes("team-admin")) {
+      availableTeams.push("team-alpha", "team-beta", "team-gamma");
+      // 重複を削除
+      const uniqueTeams = Array.from(new Set(availableTeams));
+      availableTeams.length = 0;
+      availableTeams.push(...uniqueTeams);
+    }
+
+    // 後方互換性のためteamIdも返す（最初のチームまたはローカルストレージ）
+    let teamId: string | null = null;
+    if (typeof window !== "undefined") {
+      teamId = localStorage.getItem("selectedTeamId");
+    }
+    if (!teamId && availableTeams.length > 0) {
+      teamId = availableTeams[0];
+    }
 
     return {
       username: user.username,
       email: user.signInDetails?.loginId,
       groups,
       teamId,
+      availableTeams,
     };
   } catch (error) {
     console.error("Failed to get user info:", error);

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AuthGuard } from "@/components/AuthGuard";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
+import { TeamSelector } from "@/components/TeamSelector";
 import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { QueryInput } from "@/components/QueryInput";
 import { SqlDisplay } from "@/components/SqlDisplay";
@@ -11,6 +12,7 @@ import { QueryResultTable } from "@/components/QueryResultTable";
 import { Card } from "@/components/ui/Card";
 import { Toast } from "@/components/ui/Toast";
 import { generateSqlWithBedrock } from "@/lib/bedrock";
+import { generateSignedUrls } from "@/lib/s3-utils";
 
 /**
  * ダッシュボードページ
@@ -35,6 +37,7 @@ interface QueryResult {
 }
 
 export default function DashboardPage() {
+  const [selectedTeamId, setSelectedTeamId] = useState<string>("");
   const [isQueryLoading, setIsQueryLoading] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [generatedSql, setGeneratedSql] = useState<GeneratedSql | null>(null);
@@ -49,6 +52,14 @@ export default function DashboardPage() {
   } | null>(null);
 
   const handleQuerySubmit = async (query: string) => {
+    if (!selectedTeamId) {
+      setToast({
+        type: "error",
+        message: "チームを選択してください",
+      });
+      return;
+    }
+
     setIsQueryLoading(true);
     setGeneratedSql(null);
     setQueryResult(null);
@@ -57,6 +68,7 @@ export default function DashboardPage() {
       // クライアントサイドで直接Bedrockを呼び出す
       const data = await generateSqlWithBedrock({
         query,
+        teamId: selectedTeamId,
         dateRange,
       });
 
@@ -81,61 +93,72 @@ export default function DashboardPage() {
     }
   };
 
-  const handleExecuteSql = async () => {
+  const handleExecuteSql = async (editedSql?: string) => {
     if (!generatedSql) return;
+
+    if (!selectedTeamId) {
+      setToast({
+        type: "error",
+        message: "チームを選択してください",
+      });
+      return;
+    }
+
+    // 編集されたSQLがあればそれを使用、なければ元のSQLを使用
+    const sqlToExecute = editedSql || generatedSql.sql;
+    console.log('Executing SQL:', sqlToExecute);
 
     setIsExecuting(true);
     setQueryResult(null);
 
     try {
-      // 1. S3 Signed URLsを取得
-      const signedUrlsResponse = await fetch("/api/get-signed-urls", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ dateRange }),
-      });
+      // 1. S3 Signed URLsを生成（クライアントサイド）
+      const signedUrls = await generateSignedUrls(selectedTeamId, dateRange);
 
-      if (!signedUrlsResponse.ok) {
-        const error = await signedUrlsResponse.json();
-        throw new Error(error.error || "Signed URLs取得に失敗しました");
+      // 2. DuckDB WASMを初期化（ブラウザで実行）
+      const { initializeDuckDB, loadParquetFromS3, executeQuery } = await import("@/lib/duckdb");
+      await initializeDuckDB();
+
+      // 3. S3からデータを読み込み
+      await loadParquetFromS3("logs", signedUrls);
+
+      // 4. クエリを実行（編集されたSQLまたは元のSQL）
+      const result = await executeQuery(sqlToExecute);
+
+      // 5. 結果を配列形式に変換（toArray()を使用）
+      const resultRows = result.toArray();
+      console.log('Query result rows:', resultRows.length, resultRows.slice(0, 2));
+
+      let columns: string[] = [];
+      let rows: any[][] = [];
+
+      if (resultRows.length === 0) {
+        setQueryResult({
+          columns: [],
+          rows: [],
+          totalRows: 0,
+        });
+      } else {
+        // カラム名を取得
+        columns = Object.keys(resultRows[0]);
+
+        // 各行を配列形式に変換
+        rows = resultRows.map((row: any) => {
+          return columns.map(col => row[col]);
+        });
+
+        console.log('Formatted result:', { columns, rowCount: rows.length, sampleRow: rows[0] });
+
+        setQueryResult({
+          columns,
+          rows,
+          totalRows: rows.length,
+        });
       }
-
-      const { signedUrls } = await signedUrlsResponse.json();
-
-      if (!signedUrls || signedUrls.length === 0) {
-        throw new Error("指定された期間にログファイルが見つかりません");
-      }
-
-      // 2. DuckDBでクエリを実行
-      const executeResponse = await fetch("/api/execute-query", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          sql: generatedSql.sql,
-          signedUrls,
-        }),
-      });
-
-      if (!executeResponse.ok) {
-        const error = await executeResponse.json();
-        throw new Error(error.error || "クエリ実行に失敗しました");
-      }
-
-      const result = await executeResponse.json();
-
-      setQueryResult({
-        columns: result.columns,
-        rows: result.rows,
-        totalRows: result.totalRows,
-      });
 
       setToast({
         type: "success",
-        message: `クエリを実行しました（${result.totalRows}件）`,
+        message: `クエリを実行しました（${rows.length}件）`,
       });
     } catch (error) {
       console.error("Query execution error:", error);
@@ -161,6 +184,12 @@ export default function DashboardPage() {
           {/* メインコンテンツ */}
           <main className="flex-1 overflow-y-auto">
             <div className="container mx-auto px-6 py-8 max-w-7xl">
+              {/* チーム選択 */}
+              <TeamSelector
+                onTeamSelect={setSelectedTeamId}
+                currentTeamId={selectedTeamId}
+              />
+
               {/* フェイズ完了バナー */}
               <Card className="mb-6 bg-green-50 border-green-200">
                 <div className="flex items-start">

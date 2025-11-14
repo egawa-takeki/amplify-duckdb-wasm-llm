@@ -3,7 +3,7 @@ import {
   InvokeModelCommand,
 } from "@aws-sdk/client-bedrock-runtime";
 import { fetchAuthSession } from "aws-amplify/auth";
-import { getSchemaDescription } from "./sql-validator";
+import { getTeamSchemaDescription } from "./team-schemas";
 
 /**
  * Bedrock APIを使用してSQLを生成
@@ -18,6 +18,7 @@ const REGION = "us-east-1";
 
 interface GenerateSqlRequest {
   query: string;
+  teamId: string; // チームIDを追加
   dateRange: {
     startDate: string;
     endDate: string;
@@ -30,12 +31,12 @@ interface GenerateSqlResponse {
 }
 
 /**
- * Claude用のシステムプロンプト
+ * Claude用のシステムプロンプト（チームごとのスキーマを使用）
  */
-function getSystemPrompt(): string {
-  const schema = getSchemaDescription();
+function getSystemPrompt(teamId: string): string {
+  const schema = getTeamSchemaDescription(teamId);
 
-  return `あなたはログ解析用のSQLクエリを生成する専門家です。
+  return `あなたはソーシャルゲームのログ解析用SQLクエリを生成する専門家です。
 
 # データベーススキーマ
 ${schema}
@@ -45,7 +46,22 @@ ${schema}
 - CREATE、DROP、INSERT、UPDATE、DELETE、COPY、ATTACH等のDDL/DML文は使用禁止です
 - 複数のSQL文を実行することはできません（セミコロンは1つのみ）
 - SQLコメント（--や/* */）は使用しないでください
-- 日付フィルタは必ず timestamp カラムを使用してください
+
+# 日付フィルタの重要な注意事項
+- timestamp カラムは VARCHAR 型で、ISO 8601形式 (例: '2025-11-13T00:00:16') で格納されています
+- 日付フィルタには以下のいずれかの方法を使用してください：
+  1. LIKE演算子: timestamp LIKE '2025-11-13%'
+  2. 範囲指定: timestamp BETWEEN '2025-11-13T00:00:00' AND '2025-11-13T23:59:59'
+  3. DATE関数: DATE(timestamp) = '2025-11-13'
+- スペース区切りの日付時刻形式（'2025-11-13 00:00:00'）は使用しないでください
+
+# ゲーム特有の分析例
+- ガチャイベント: event_type = 'gacha'
+- 課金イベント: event_type = 'purchase'
+- プレイヤーレベル分析: player_level でグループ化
+- プラットフォーム別分析: platform (iOS, Android, Web) で集計
+- 通貨の収支: currency_type, currency_amount を使用
+- エラー分析: level = 'ERROR' and error IS NOT NULL
 
 # 出力形式
 JSON形式で以下を返してください：
@@ -77,11 +93,18 @@ ${request.query}
  * Cognito認証済みユーザーの一時認証情報を取得して使用
  */
 async function getBedrockClient(): Promise<BedrockRuntimeClient> {
-  const session = await fetchAuthSession();
+  // forceRefresh: true で最新の認証情報を取得
+  const session = await fetchAuthSession({ forceRefresh: true });
 
   if (!session.credentials) {
     throw new Error("AWS認証情報が取得できません");
   }
+
+  // デバッグ用ログ
+  console.log("Bedrock credentials obtained:", {
+    accessKeyId: session.credentials.accessKeyId?.substring(0, 10) + "...",
+    hasSessionToken: !!session.credentials.sessionToken,
+  });
 
   return new BedrockRuntimeClient({
     region: REGION,
@@ -101,7 +124,7 @@ export async function generateSqlWithBedrock(
     // Amazon Nova Pro用のリクエストボディ
     const body = {
       schemaVersion: "messages-v1",
-      system: [{ text: getSystemPrompt() }],
+      system: [{ text: getSystemPrompt(request.teamId) }],
       messages: [
         {
           role: "user",

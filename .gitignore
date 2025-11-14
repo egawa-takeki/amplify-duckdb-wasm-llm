@@ -49,3 +49,6 @@ next-env.d.ts
 amplify_outputs.json
 .amplify/
 amplify/data/resource.generated.ts
+
+# Test data
+test-data/

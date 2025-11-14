@@ -16,13 +16,15 @@ const backend = defineBackend({
 });
 
 // Bedrock用のIAMポリシーを追加
-// Amazon Nova Proの推論プロファイルを使用
+// Amazon Nova Proモデルへのアクセス権限
 const bedrockPolicy = new PolicyStatement({
   actions: ["bedrock:InvokeModel"],
   resources: [
-    // 推論プロファイル用のARN形式
+    // Amazon Nova Pro v1:0への直接アクセス
+    "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-pro-v1:0",
+    // 推論プロファイル（リージョン横断アクセス用）
     "arn:aws:bedrock:*:*:inference-profile/us.amazon.nova-pro-v1:0",
-    // 基盤モデルへの直接アクセス用（フォールバック）
+    // 他のNova Proバージョンへのアクセス（フォールバック）
     "arn:aws:bedrock:*::foundation-model/amazon.nova-pro-*",
   ],
 });
@@ -42,3 +44,31 @@ backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(
 );
 
 backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(s3Policy);
+
+// 各グループのロールにも同じポリシーを追加
+// Cognitoグループごとに個別のIAMロールが作成されるため、それぞれに権限が必要
+backend.auth.resources.groups["team-alpha"].role?.addToPrincipalPolicy(
+  bedrockPolicy
+);
+backend.auth.resources.groups["team-alpha"].role?.addToPrincipalPolicy(
+  s3Policy
+);
+
+backend.auth.resources.groups["team-beta"].role?.addToPrincipalPolicy(
+  bedrockPolicy
+);
+backend.auth.resources.groups["team-beta"].role?.addToPrincipalPolicy(s3Policy);
+
+backend.auth.resources.groups["team-gamma"].role?.addToPrincipalPolicy(
+  bedrockPolicy
+);
+backend.auth.resources.groups["team-gamma"].role?.addToPrincipalPolicy(
+  s3Policy
+);
+
+backend.auth.resources.groups["team-admin"].role?.addToPrincipalPolicy(
+  bedrockPolicy
+);
+backend.auth.resources.groups["team-admin"].role?.addToPrincipalPolicy(
+  s3Policy
+);

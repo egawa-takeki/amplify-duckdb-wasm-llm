@@ -90,22 +90,49 @@ export function validateSql(sql: string): ValidationResult {
 }
 
 /**
- * ログスキーマの定義
+ * ログスキーマの定義（ソーシャルゲーム向け）
  */
 export const LOG_SCHEMA = {
   tableName: "logs",
   columns: [
-    { name: "timestamp", type: "TIMESTAMP", description: "ログ発生時刻" },
-    { name: "level", type: "VARCHAR", description: "ログレベル (INFO, WARN, ERROR等)" },
-    { name: "service", type: "VARCHAR", description: "サービス名" },
-    { name: "message", type: "TEXT", description: "ログメッセージ" },
-    { name: "user_id", type: "VARCHAR", description: "ユーザーID" },
-    { name: "request_id", type: "VARCHAR", description: "リクエストID" },
-    { name: "endpoint", type: "VARCHAR", description: "APIエンドポイント" },
-    { name: "status_code", type: "INTEGER", description: "HTTPステータスコード" },
-    { name: "response_time", type: "INTEGER", description: "レスポンス時間(ms)" },
-    { name: "error_type", type: "VARCHAR", description: "エラータイプ" },
-    { name: "stack_trace", type: "TEXT", description: "スタックトレース" },
+    // 基本情報
+    { name: "timestamp", type: "TIMESTAMP", description: "イベント発生時刻" },
+    { name: "team_id", type: "VARCHAR", description: "チームID" },
+    { name: "event_type", type: "VARCHAR", description: "イベントタイプ (login, gacha, purchase, quest, battle等)" },
+    { name: "level", type: "VARCHAR", description: "ログレベル (INFO, WARN, ERROR, DEBUG)" },
+
+    // プレイヤー情報
+    { name: "player_id", type: "VARCHAR", description: "プレイヤーID" },
+    { name: "player_level", type: "INTEGER", description: "プレイヤーレベル" },
+    { name: "session_id", type: "VARCHAR", description: "セッションID" },
+
+    // ゲームイベント情報
+    { name: "event_name", type: "VARCHAR", description: "イベント名 (daily_login, gacha_pull, quest_clear等)" },
+    { name: "event_data", type: "TEXT", description: "イベント詳細データ (JSON形式)" },
+
+    // アイテム/リソース
+    { name: "item_id", type: "VARCHAR", description: "アイテムID" },
+    { name: "item_quantity", type: "INTEGER", description: "アイテム数量" },
+    { name: "currency_type", type: "VARCHAR", description: "通貨タイプ (gem, coin, ticket, energy等)" },
+    { name: "currency_amount", type: "INTEGER", description: "通貨量" },
+
+    // 課金情報
+    { name: "transaction_id", type: "VARCHAR", description: "トランザクションID" },
+    { name: "purchase_amount", type: "DECIMAL", description: "購入金額" },
+    { name: "currency_code", type: "VARCHAR", description: "通貨コード (JPY, USD, EUR等)" },
+
+    // パフォーマンス
+    { name: "duration_ms", type: "INTEGER", description: "処理時間(ミリ秒)" },
+    { name: "status_code", type: "INTEGER", description: "ステータスコード" },
+
+    // エラー/デバッグ
+    { name: "error", type: "TEXT", description: "エラーメッセージ" },
+    { name: "trace_id", type: "VARCHAR", description: "トレースID" },
+
+    // その他
+    { name: "platform", type: "VARCHAR", description: "プラットフォーム (iOS, Android, Web)" },
+    { name: "app_version", type: "VARCHAR", description: "アプリバージョン" },
+    { name: "device_id", type: "VARCHAR", description: "デバイスID" },
   ],
 };
 
