@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AuthGuard } from "@/components/AuthGuard";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
@@ -10,6 +10,7 @@ import { QueryInput } from "@/components/QueryInput";
 import { SqlDisplay } from "@/components/SqlDisplay";
 import { QueryResultTable } from "@/components/QueryResultTable";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Toast } from "@/components/ui/Toast";
 import { generateSqlWithBedrock } from "@/lib/bedrock";
 import { generateSignedUrls } from "@/lib/s3-utils";
@@ -36,6 +37,12 @@ interface QueryResult {
   totalRows: number;
 }
 
+interface LoadedDataInfo {
+  teamId: string;
+  dateRange: DateRange;
+  recordCount: number;
+}
+
 export default function DashboardPage() {
   const [selectedTeamId, setSelectedTeamId] = useState<string>("");
   const [isQueryLoading, setIsQueryLoading] = useState(false);
@@ -50,6 +57,31 @@ export default function DashboardPage() {
     type: "success" | "error" | "warning" | "info";
     message: string;
   } | null>(null);
+
+  // データロード管理用のstate
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [loadedDataInfo, setLoadedDataInfo] = useState<LoadedDataInfo | null>(null);
+
+  // チームIDまたは日付範囲が変更された場合、ロード済みデータをクリア
+  useEffect(() => {
+    if (loadedDataInfo) {
+      const teamChanged = selectedTeamId !== loadedDataInfo.teamId;
+      const dateChanged =
+        dateRange.startDate !== loadedDataInfo.dateRange.startDate ||
+        dateRange.endDate !== loadedDataInfo.dateRange.endDate;
+
+      if (teamChanged || dateChanged) {
+        setIsDataLoaded(false);
+        setLoadedDataInfo(null);
+        setQueryResult(null);
+        setToast({
+          type: "info",
+          message: "チームまたは日付範囲が変更されました。データを再ロードしてください。",
+        });
+      }
+    }
+  }, [selectedTeamId, dateRange, loadedDataInfo]);
 
   const handleQuerySubmit = async (query: string) => {
     if (!selectedTeamId) {
@@ -93,13 +125,68 @@ export default function DashboardPage() {
     }
   };
 
-  const handleExecuteSql = async (editedSql?: string) => {
-    if (!generatedSql) return;
-
+  const handleLoadData = async () => {
     if (!selectedTeamId) {
       setToast({
         type: "error",
         message: "チームを選択してください",
+      });
+      return;
+    }
+
+    setIsLoadingData(true);
+    setQueryResult(null);
+
+    try {
+      // 1. S3 Signed URLsを生成
+      const signedUrls = await generateSignedUrls(selectedTeamId, dateRange);
+
+      // 2. DuckDB WASMを初期化
+      const { initializeDuckDB, loadParquetFromS3, executeQuery } = await import("@/lib/duckdb");
+      await initializeDuckDB();
+
+      // 3. S3からデータを読み込み
+      await loadParquetFromS3("logs", signedUrls);
+
+      // 4. レコード数を取得
+      const countResult = await executeQuery("SELECT COUNT(*) as count FROM logs");
+      const countRows = countResult.toArray();
+      const recordCount = countRows[0]?.count || 0;
+
+      // 5. ロード情報を保存
+      setLoadedDataInfo({
+        teamId: selectedTeamId,
+        dateRange: { ...dateRange },
+        recordCount: typeof recordCount === 'bigint' ? Number(recordCount) : recordCount,
+      });
+      setIsDataLoaded(true);
+
+      setToast({
+        type: "success",
+        message: `データをロードしました（${recordCount}件）`,
+      });
+    } catch (error) {
+      console.error("Data load error:", error);
+      setToast({
+        type: "error",
+        message:
+          error instanceof Error ? error.message : "データロードに失敗しました",
+      });
+      setIsDataLoaded(false);
+      setLoadedDataInfo(null);
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  const handleExecuteSql = async (editedSql?: string) => {
+    if (!generatedSql) return;
+
+    // データがロードされていない場合はエラー
+    if (!isDataLoaded) {
+      setToast({
+        type: "error",
+        message: "先にデータをロードしてください",
       });
       return;
     }
@@ -112,20 +199,13 @@ export default function DashboardPage() {
     setQueryResult(null);
 
     try {
-      // 1. S3 Signed URLsを生成（クライアントサイド）
-      const signedUrls = await generateSignedUrls(selectedTeamId, dateRange);
+      // DuckDB executeQuery関数をインポート（データは既にロード済み）
+      const { executeQuery } = await import("@/lib/duckdb");
 
-      // 2. DuckDB WASMを初期化（ブラウザで実行）
-      const { initializeDuckDB, loadParquetFromS3, executeQuery } = await import("@/lib/duckdb");
-      await initializeDuckDB();
-
-      // 3. S3からデータを読み込み
-      await loadParquetFromS3("logs", signedUrls);
-
-      // 4. クエリを実行（編集されたSQLまたは元のSQL）
+      // クエリを実行（編集されたSQLまたは元のSQL）
       const result = await executeQuery(sqlToExecute);
 
-      // 5. 結果を配列形式に変換（toArray()を使用）
+      // 結果を配列形式に変換（toArray()を使用）
       const resultRows = result.toArray();
       console.log('Query result rows:', resultRows.length, resultRows.slice(0, 2));
 
@@ -222,11 +302,86 @@ export default function DashboardPage() {
                 />
               </div>
 
+              {/* データロードセクション */}
+              <Card className="mb-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                      データロード
+                    </h3>
+                    <p className="text-xs text-gray-600">
+                      分析を開始する前に、選択したチームと期間のデータをロードしてください
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleLoadData}
+                    isLoading={isLoadingData}
+                    disabled={isLoadingData || !selectedTeamId}
+                    className="ml-4"
+                  >
+                    <svg
+                      className="w-4 h-4 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                      />
+                    </svg>
+                    {isLoadingData ? "ロード中..." : "データをロード"}
+                  </Button>
+                </div>
+
+                {/* ロード済みデータ情報パネル */}
+                {isDataLoaded && loadedDataInfo && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-start">
+                      <svg
+                        className="w-5 h-5 text-green-600 mt-0.5 mr-2 flex-shrink-0"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-green-800 mb-1">
+                          データロード完了
+                        </p>
+                        <div className="text-xs text-gray-600 space-y-1">
+                          <p>
+                            <span className="font-medium">チーム:</span>{" "}
+                            {loadedDataInfo.teamId}
+                          </p>
+                          <p>
+                            <span className="font-medium">期間:</span>{" "}
+                            {loadedDataInfo.dateRange.startDate} 〜{" "}
+                            {loadedDataInfo.dateRange.endDate}
+                          </p>
+                          <p>
+                            <span className="font-medium">レコード数:</span>{" "}
+                            {loadedDataInfo.recordCount.toLocaleString()}件
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Card>
+
               {/* 自然言語入力 */}
               <div className="mb-6">
                 <QueryInput
                   onSubmit={handleQuerySubmit}
                   isLoading={isQueryLoading}
+                  disabled={!isDataLoaded}
                 />
               </div>
 

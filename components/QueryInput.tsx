@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from "react";
 interface QueryInputProps {
   onSubmit?: (query: string) => void;
   isLoading?: boolean;
+  disabled?: boolean;
 }
 
 const suggestions = [
@@ -18,7 +19,7 @@ const suggestions = [
 /**
  * 自然言語クエリ入力コンポーネント
  */
-export function QueryInput({ onSubmit, isLoading = false }: QueryInputProps) {
+export function QueryInput({ onSubmit, isLoading = false, disabled = false }: QueryInputProps) {
   const [query, setQuery] = useState("");
   const [charCount, setCharCount] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -42,7 +43,7 @@ export function QueryInput({ onSubmit, isLoading = false }: QueryInputProps) {
   };
 
   const handleSubmit = () => {
-    if (query.trim() && !isLoading) {
+    if (query.trim() && !isLoading && !disabled) {
       onSubmit?.(query.trim());
       // クエリ送信後はクリアしない（会話継続のため）
     }
@@ -115,8 +116,8 @@ export function QueryInput({ onSubmit, isLoading = false }: QueryInputProps) {
           value={query}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder="ログについて質問してください（例：過去24時間のエラーログを表示）"
-          disabled={isLoading}
+          placeholder={disabled ? "データをロードしてから質問してください" : "ログについて質問してください（例：過去24時間のエラーログを表示）"}
+          disabled={isLoading || disabled}
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none min-h-[80px] max-h-[200px] disabled:bg-gray-50 disabled:text-gray-500"
           rows={3}
         />
@@ -150,7 +151,7 @@ export function QueryInput({ onSubmit, isLoading = false }: QueryInputProps) {
 
         <button
           onClick={handleSubmit}
-          disabled={!query.trim() || isLoading}
+          disabled={!query.trim() || isLoading || disabled}
           className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary-hover transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2"
         >
           {isLoading ? (
