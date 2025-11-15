@@ -188,14 +188,15 @@ def generate_team_specific_fields(team_id: str, event_type: str) -> dict:
 
     return fields
 
-def generate_log_entry(timestamp: datetime, team_id: str) -> dict:
+def generate_log_entry(timestamp: datetime, team_id: str, player_pool: list) -> dict:
     """単一のログエントリを生成"""
     event_type = random.choice(EVENT_TYPES)
     event_name = random.choice(GAME_EVENTS[event_type])
     error = random.choice(ERRORS)
     level = "ERROR" if error else random.choice(["INFO", "INFO", "INFO", "INFO", "DEBUG", "WARN"])
 
-    player_id = f"player_{team_id}_{random.randint(10000, 99999)}"
+    # プレイヤープールから選択（重複させる）
+    player_id = random.choice(player_pool)
     platform = random.choice(PLATFORMS)
 
     # イベントデータ
@@ -248,7 +249,7 @@ def generate_log_entry(timestamp: datetime, team_id: str) -> dict:
 
     return log_entry
 
-def generate_logs_for_hour(date: datetime, hour: int, team_id: str, num_logs: int = 50) -> list:
+def generate_logs_for_hour(date: datetime, hour: int, team_id: str, player_pool: list, num_logs: int = 50) -> list:
     """指定時間のログを生成"""
     logs = []
 
@@ -260,7 +261,7 @@ def generate_logs_for_hour(date: datetime, hour: int, team_id: str, num_logs: in
         random_seconds = random.randint(0, 3599)  # 1時間 = 3600秒
         log_time = hour_start + timedelta(seconds=random_seconds)
 
-        log_entry = generate_log_entry(log_time, team_id)
+        log_entry = generate_log_entry(log_time, team_id, player_pool)
         logs.append(log_entry)
 
     # 時系列でソート
@@ -297,6 +298,11 @@ def main():
 
     total_files = 0
     for team_name, team_id in teams.items():
+        # チームごとにプレイヤーIDプールを作成（重複させるため）
+        # 各チームに100～150人のユニークなプレイヤー
+        num_players = random.randint(100, 150)
+        player_pool = [f"player_{team_id}_{i:05d}" for i in range(1, num_players + 1)]
+
         for days_offset in range(num_days):
             date = start_date + timedelta(days=days_offset)
 
@@ -305,9 +311,16 @@ def main():
             month = date.strftime("%m")
             day = date.strftime("%d")
 
-            # 24時間分のログを生成 (1時間あたり50件)
+            # 11/15～11/20はデータ量を増やす（1時間あたり200件）
+            date_str = date.strftime("%Y-%m-%d")
+            if "2025-11-15" <= date_str <= "2025-11-20":
+                logs_per_hour = 200
+            else:
+                logs_per_hour = 50
+
+            # 24時間分のログを生成
             for hour in range(24):
-                logs = generate_logs_for_hour(date, hour, team_id, num_logs=50)
+                logs = generate_logs_for_hour(date, hour, team_id, player_pool, num_logs=logs_per_hour)
 
                 # パーティション構造: team_id=xxx/year=YYYY/month=MM/day=DD/hour=HH/
                 output_path = (output_dir / f"team_id={team_id}" /
@@ -320,6 +333,14 @@ def main():
     print(f"\nTotal: {total_files} files generated in {output_dir}")
     print(f"  {len(teams)} teams × {num_days} days × 24 hours = {len(teams) * num_days * 24} files")
     print(f"  Date range: 2025-11-12 to 2025-12-01")
+    print("\nData Volume:")
+    print("  2025-11-12 to 2025-11-14: 50 logs/hour (normal)")
+    print("  2025-11-15 to 2025-11-20: 200 logs/hour (HIGH VOLUME)")
+    print("  2025-11-21 to 2025-12-01: 50 logs/hour (normal)")
+    print("\nPlayer IDs:")
+    print("  Each team has 100-150 unique players")
+    print("  Player IDs are reused across multiple events")
+    print("  Format: player_team-id_00001 to player_team-id_00150")
     print("\nPartition structure:")
     print("  team_id=team-alpha/year=YYYY/month=MM/day=DD/hour=HH/logs-HH.jsonl.gz")
     print("\nTeam-Specific Schemas:")
