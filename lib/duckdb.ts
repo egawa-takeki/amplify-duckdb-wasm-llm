@@ -183,7 +183,7 @@ export async function loadParquetFromS3(
 /**
  * SQLクエリを実行
  */
-export async function executeQuery(sql: string): Promise<duckdb.Table> {
+export async function executeQuery(sql: string): Promise<any> {
   const connection = await getConnection();
 
   try {
@@ -200,7 +200,7 @@ export async function executeQuery(sql: string): Promise<duckdb.Table> {
 /**
  * クエリ結果をJSON配列に変換
  */
-export function tableToJson(table: duckdb.Table): Record<string, any>[] {
+export function tableToJson(table: any): Record<string, any>[] {
   const rows: Record<string, any>[] = [];
   const numRows = table.numRows;
 

@@ -16,6 +16,11 @@ import { Toast } from "@/components/ui/Toast";
 import { generateSqlWithBedrock } from "@/lib/bedrock";
 import { generateSignedUrls } from "@/lib/s3-utils";
 import { exportQueryResultAsCSV } from "@/lib/csv-export";
+import {
+  saveConversationHistory,
+  generateResultSummary,
+  type ConversationHistory,
+} from "@/lib/conversation-history";
 
 /**
  * ダッシュボードページ
@@ -65,6 +70,12 @@ export default function DashboardPage() {
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [loadedDataInfo, setLoadedDataInfo] = useState<LoadedDataInfo | null>(null);
 
+  // 会話履歴管理用のstate
+  const [currentHistoryId, setCurrentHistoryId] = useState<string | undefined>(
+    undefined,
+  );
+  const [currentQuestion, setCurrentQuestion] = useState<string>("");
+
   // チームIDまたは日付範囲が変更された場合、ロード済みデータをクリア
   useEffect(() => {
     if (loadedDataInfo) {
@@ -93,6 +104,9 @@ export default function DashboardPage() {
       });
       return;
     }
+
+    // 質問を保存
+    setCurrentQuestion(query);
 
     setIsQueryLoading(true);
     setGeneratedSql(null);
@@ -181,6 +195,34 @@ export default function DashboardPage() {
     }
   };
 
+  const handleSelectHistory = (history: ConversationHistory) => {
+    setCurrentHistoryId(history.id);
+    setCurrentQuestion(history.question);
+    setSelectedTeamId(history.teamId);
+    setDateRange(history.dateRange);
+    setGeneratedSql({
+      sql: history.sql,
+      explanation: history.explanation,
+    });
+    // クエリ結果は再実行が必要
+    setQueryResult(null);
+    setToast({
+      type: "info",
+      message: "過去の会話を読み込みました。クエリを再実行してください。",
+    });
+  };
+
+  const handleNewConversation = () => {
+    setCurrentHistoryId(undefined);
+    setCurrentQuestion("");
+    setGeneratedSql(null);
+    setQueryResult(null);
+    setToast({
+      type: "info",
+      message: "新しい会話を開始しました",
+    });
+  };
+
   const handleExecuteSql = async (editedSql?: string) => {
     if (!generatedSql) return;
 
@@ -238,6 +280,19 @@ export default function DashboardPage() {
         });
       }
 
+      // 会話履歴に保存
+      if (currentQuestion && generatedSql) {
+        const saved = saveConversationHistory({
+          question: currentQuestion,
+          sql: editedSql || generatedSql.sql,
+          explanation: generatedSql.explanation,
+          resultSummary: generateResultSummary(columns, rows.length),
+          teamId: selectedTeamId,
+          dateRange: { ...dateRange },
+        });
+        setCurrentHistoryId(saved.id);
+      }
+
       setToast({
         type: "success",
         message: `クエリを実行しました（${rows.length}件）`,
@@ -261,7 +316,11 @@ export default function DashboardPage() {
 
         <div className="flex flex-1 overflow-hidden">
           {/* サイドバー */}
-          <Sidebar />
+          <Sidebar
+            onSelectHistory={handleSelectHistory}
+            onNewConversation={handleNewConversation}
+            currentHistoryId={currentHistoryId}
+          />
 
           {/* メインコンテンツ */}
           <main className="flex-1 overflow-y-auto">
