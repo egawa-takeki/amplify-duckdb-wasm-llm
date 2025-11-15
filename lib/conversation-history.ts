@@ -55,8 +55,11 @@ export function saveConversationHistory(
     throw new Error("localStorage is not available");
   }
 
+  // BigInt値を通常の数値に変換
+  const convertedItem = convertBigIntToNumber(item);
+
   const newItem: ConversationHistory = {
-    ...item,
+    ...convertedItem,
     id: generateId(),
     timestamp: new Date().toISOString(),
   };
@@ -135,4 +138,31 @@ export function generateResultSummary(
 
   const columnCount = columns.length;
   return `${totalRows}件 (${columnCount}カラム)`;
+}
+
+/**
+ * BigInt値を通常の数値に変換する
+ */
+function convertBigIntToNumber(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  if (typeof obj === "bigint") {
+    return Number(obj);
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(convertBigIntToNumber);
+  }
+
+  if (typeof obj === "object") {
+    const converted: any = {};
+    for (const key in obj) {
+      converted[key] = convertBigIntToNumber(obj[key]);
+    }
+    return converted;
+  }
+
+  return obj;
 }
