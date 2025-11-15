@@ -121,44 +121,52 @@ export function ConversationHistoryList({
         ) : (
           <div className="p-2 space-y-1">
             {history.map((item) => (
-              <button
+              <div
                 key={item.id}
-                onClick={() => onSelectHistory(item)}
-                className={`w-full text-left p-3 rounded-lg transition-colors group ${
+                className={`w-full p-3 rounded-lg transition-colors group relative ${
                   currentHistoryId === item.id
                     ? "bg-primary-50 border border-primary-200"
                     : "hover:bg-gray-50 border border-transparent"
                 }`}
               >
-                <div className="flex items-start justify-between mb-1">
-                  <p className="text-sm font-medium text-gray-900 flex-1 pr-2">
-                    {truncateText(item.question)}
-                  </p>
-                  <button
-                    onClick={(e) => handleDelete(item.id, e)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-error"
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                <div
+                  onClick={() => onSelectHistory(item)}
+                  className="cursor-pointer"
+                >
+                  <div className="flex items-start justify-between mb-1">
+                    <p className="text-sm font-medium text-gray-900 flex-1 pr-2">
+                      {truncateText(item.question)}
+                    </p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(item.id, e);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-error flex-shrink-0"
+                      aria-label="削除"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
-                </div>
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                    </button>
+                  </div>
 
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                  <span>{formatDate(item.timestamp)}</span>
-                  <span>{item.resultSummary}</span>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>{formatDate(item.timestamp)}</span>
+                    <span>{item.resultSummary}</span>
+                  </div>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}
