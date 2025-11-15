@@ -297,11 +297,9 @@ def main():
     # 出力ディレクトリ
     output_dir = Path(__file__).parent.parent / "test-data" / "logs-parquet"
 
-    # 各チームのログを生成 (document.mdのパーティション構造に準拠)
+    # team-alphaのみのログを生成 (document.mdのパーティション構造に準拠)
     teams = {
-        "team-alpha": "team-alpha",
-        "team-beta": "team-beta",
-        "team-gamma": "team-gamma"
+        "team-alpha": "team-alpha"
     }
 
     # 2025年11月12日から12月1日までのログを生成（20日間）
