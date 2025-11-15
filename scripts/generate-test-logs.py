@@ -291,13 +291,14 @@ def main():
         "team-gamma": "team-gamma"
     }
 
-    # 過去7日間のログを生成
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    # 2025年11月12日から12月1日までのログを生成（20日間）
+    start_date = datetime(2025, 11, 12, 0, 0, 0)
+    num_days = 20  # 11/12 から 12/1 まで
 
     total_files = 0
     for team_name, team_id in teams.items():
-        for days_ago in range(7):
-            date = today - timedelta(days=days_ago)
+        for days_offset in range(num_days):
+            date = start_date + timedelta(days=days_offset)
 
             # document.mdに準拠したパーティション構造
             year = date.strftime("%Y")
@@ -317,7 +318,8 @@ def main():
                 total_files += 1
 
     print(f"\nTotal: {total_files} files generated in {output_dir}")
-    print(f"  {len(teams)} teams × 7 days × 24 hours = {len(teams) * 7 * 24} files")
+    print(f"  {len(teams)} teams × {num_days} days × 24 hours = {len(teams) * num_days * 24} files")
+    print(f"  Date range: 2025-11-12 to 2025-12-01")
     print("\nPartition structure:")
     print("  team_id=team-alpha/year=YYYY/month=MM/day=DD/hour=HH/logs-HH.jsonl.gz")
     print("\nTeam-Specific Schemas:")
