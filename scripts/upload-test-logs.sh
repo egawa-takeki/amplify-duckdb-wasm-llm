@@ -5,7 +5,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-TEST_DATA_DIR="$PROJECT_ROOT/test-data/logs"
+TEST_DATA_DIR="$PROJECT_ROOT/test-data/logs-parquet"
 
 # amplify_outputs.jsonからS3バケット名を取得
 OUTPUTS_FILE="$PROJECT_ROOT/amplify_outputs.json"
@@ -36,23 +36,23 @@ echo ""
 # テストデータが存在しない場合は生成
 if [ ! -d "$TEST_DATA_DIR" ]; then
   echo "Test logs not found. Generating..."
-  python3 "$SCRIPT_DIR/generate-test-logs.py"
+  python3 "$SCRIPT_DIR/generate-test-logs-parquet.py"
   echo ""
 fi
 
 # ファイル数をカウント
-FILE_COUNT=$(find "$TEST_DATA_DIR" -name "*.jsonl.gz" | wc -l)
-echo "Found $FILE_COUNT log files to upload"
+FILE_COUNT=$(find "$TEST_DATA_DIR" -name "*.parquet" | wc -l)
+echo "Found $FILE_COUNT Parquet files to upload"
 echo ""
 
 # S3にアップロード（Hiveパーティション構造を維持）
-echo "Uploading logs to S3..."
+echo "Uploading Parquet logs to S3..."
 echo "This may take a few minutes..."
 echo ""
 
 aws s3 sync "$TEST_DATA_DIR/" "s3://$BUCKET_NAME/logs/" \
   --exclude "*" \
-  --include "*.jsonl.gz"
+  --include "*.parquet"
 
 echo ""
 echo "====================================="
@@ -60,9 +60,7 @@ echo "Upload Complete!"
 echo "====================================="
 echo ""
 echo "Uploaded structure (Hive partitioning):"
-echo "  s3://$BUCKET_NAME/logs/team_id=team-alpha/year=YYYY/month=MM/day=DD/hour=HH/logs-HH.jsonl.gz"
-echo "  s3://$BUCKET_NAME/logs/team_id=team-beta/year=YYYY/month=MM/day=DD/hour=HH/logs-HH.jsonl.gz"
-echo "  s3://$BUCKET_NAME/logs/team_id=team-gamma/year=YYYY/month=MM/day=DD/hour=HH/logs-HH.jsonl.gz"
+echo "  s3://$BUCKET_NAME/logs/team_id=team-alpha/year=YYYY/month=MM/day=DD/hour=HH/logs-HH.parquet"
 echo ""
 echo "Total files uploaded: $FILE_COUNT"
 echo ""
