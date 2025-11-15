@@ -66,9 +66,9 @@ export async function getConnection(): Promise<duckdb.AsyncDuckDBConnection> {
 }
 
 /**
- * S3からJSONLファイル（gzip圧縮）を読み込んでテーブルを作成
+ * S3からParquetファイルを読み込んでテーブルを作成
  *
- * DuckDB WASMのHTTPFS経由での読み込みに問題があるため、
+ * DuckDB WASMのParquetネイティブサポートを使用
  * ブラウザのfetch APIでデータを取得してから挿入する
  */
 export async function loadParquetFromS3(
@@ -78,11 +78,13 @@ export async function loadParquetFromS3(
   const connection = await getConnection();
 
   try {
-    console.log(`Loading ${s3Urls.length} files into ${tableName}...`);
+    console.log(`Loading ${s3Urls.length} Parquet files into ${tableName}...`);
 
-    // 全ファイルのデータを集約
-    let allData: any[] = [];
     let loadedFiles = 0;
+    let totalRecords = 0;
+
+    // 最初のファイルでテーブルを作成
+    let firstFile = true;
 
     for (let i = 0; i < s3Urls.length; i++) {
       const url = s3Urls[i];
@@ -94,21 +96,51 @@ export async function loadParquetFromS3(
           continue;
         }
 
-        // gzip展開
-        const blob = await response.blob();
-        const decompressedStream = blob.stream().pipeThrough(new DecompressionStream('gzip'));
-        const decompressedBlob = await new Response(decompressedStream).blob();
-        const text = await decompressedBlob.text();
+        // Parquetファイルを取得
+        const arrayBuffer = await response.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
 
-        // 改行で分割してJSON配列に変換
-        const lines = text.trim().split('\n').filter(line => line.trim());
-        const jsonData = lines.map(line => JSON.parse(line));
+        // DuckDBにファイルを登録
+        const fileName = `parquet_file_${i}.parquet`;
+        await db?.registerFileBuffer(fileName, uint8Array);
 
-        allData = allData.concat(jsonData);
+        if (firstFile) {
+          // 最初のファイル: テーブルを作成
+          await connection.query(`
+            CREATE OR REPLACE TABLE ${tableName} AS
+            SELECT * FROM read_parquet('${fileName}')
+          `);
+          firstFile = false;
+
+          // テーブル構造を確認
+          const schemaResult = await connection.query(`DESCRIBE ${tableName}`);
+          const schemaRows = schemaResult.toArray();
+          console.log('Table schema - Column count:', schemaRows.length);
+
+          // 各カラムの名前と型を表示
+          for (let j = 0; j < Math.min(10, schemaRows.length); j++) {
+            const row = schemaRows[j];
+            console.log(`  Column ${j}:`, {
+              column_name: row.column_name,
+              column_type: row.column_type,
+              null: row.null,
+            });
+          }
+        } else {
+          // 2つ目以降: データを追加
+          await connection.query(`
+            INSERT INTO ${tableName}
+            SELECT * FROM read_parquet('${fileName}')
+          `);
+        }
+
         loadedFiles++;
 
-        if ((loadedFiles) % 10 === 0) {
-          console.log(`Loaded ${loadedFiles}/${s3Urls.length} files (${allData.length} records so far)`);
+        if (loadedFiles % 10 === 0) {
+          const countResult = await connection.query(`SELECT COUNT(*) as count FROM ${tableName}`);
+          const countRow = countResult.toArray()[0];
+          totalRecords = Number(countRow.count);
+          console.log(`Loaded ${loadedFiles}/${s3Urls.length} files (${totalRecords} records so far)`);
         }
       } catch (err) {
         console.warn(`Failed to load file ${i}: ${err}`);
@@ -116,42 +148,14 @@ export async function loadParquetFromS3(
       }
     }
 
-    if (allData.length === 0) {
-      throw new Error("No data loaded from any files");
+    if (loadedFiles === 0) {
+      throw new Error("No Parquet files loaded successfully");
     }
 
-    console.log(`Total loaded: ${loadedFiles} files, ${allData.length} records`);
-
-    // サンプルデータをログ出力（デバッグ用）
-    if (allData.length > 0) {
-      console.log('Sample record:', allData[0]);
-    }
-
-    // DuckDBでJSON配列をテーブルとして読み込む
-    // JSONLの各行をJSON配列の要素として扱う
-    const jsonContent = JSON.stringify(allData, null, 0);
-    await db?.registerFileText('temp_data.json', jsonContent);
-
-    // JSONからテーブルを作成（read_json_autoを使用してスキーマ自動検出）
-    await connection.query(`
-      CREATE OR REPLACE TABLE ${tableName} AS
-      SELECT * FROM read_json_auto('temp_data.json')
-    `);
-
-    // テーブル構造を確認
-    const schemaResult = await connection.query(`DESCRIBE ${tableName}`);
-    const schemaRows = schemaResult.toArray();
-    console.log('Table schema - Column count:', schemaRows.length);
-
-    // 各カラムの名前と型を表示
-    for (let i = 0; i < Math.min(10, schemaRows.length); i++) {
-      const row = schemaRows[i];
-      console.log(`  Column ${i}:`, {
-        column_name: row.column_name,
-        column_type: row.column_type,
-        null: row.null,
-      });
-    }
+    // 最終的な行数を確認
+    const countResult = await connection.query(`SELECT COUNT(*) as count FROM ${tableName}`);
+    const countRow = countResult.toArray()[0];
+    totalRecords = Number(countRow.count);
 
     // テーブルの最初の行を確認
     const sampleQuery = await connection.query(`SELECT timestamp, level, team_id, event_type FROM ${tableName} LIMIT 1`);
@@ -166,16 +170,11 @@ export async function loadParquetFromS3(
       });
     }
 
-    // テーブルの行数を確認
-    const countResult = await connection.query(`SELECT COUNT(*) as count FROM ${tableName}`);
-    const countRow = countResult.toArray()[0];
-    console.log('Row count in table:', countRow.count);
-
-    console.log(`Table '${tableName}' created with ${allData.length} records`);
+    console.log(`Table '${tableName}' created with ${totalRecords} records from ${loadedFiles} files`);
   } catch (error) {
-    console.error("Failed to load JSONL from S3:", error);
+    console.error("Failed to load Parquet from S3:", error);
     throw new Error(
-      `JSONLファイルの読み込みに失敗しました: ${error instanceof Error ? error.message : "不明なエラー"}`,
+      `Parquetファイルの読み込みに失敗しました: ${error instanceof Error ? error.message : "不明なエラー"}`,
     );
   }
 }

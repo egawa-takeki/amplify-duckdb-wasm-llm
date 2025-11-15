@@ -281,12 +281,13 @@ def save_logs_to_parquet(logs: list, output_path: Path):
     # timestampをdatetime型に変換
     df['timestamp'] = pd.to_datetime(df['timestamp'])
 
-    # Parquetファイルとして保存（Snappy圧縮）
+    # Parquetファイルとして保存（Snappy圧縮、dictionary encodingを無効化）
     df.to_parquet(
         output_path,
         engine='pyarrow',
         compression='snappy',
-        index=False
+        index=False,
+        use_dictionary=False  # 辞書エンコーディングを無効化して型の一貫性を保つ
     )
 
     print(f"Generated: {output_path} ({len(logs)} logs)")

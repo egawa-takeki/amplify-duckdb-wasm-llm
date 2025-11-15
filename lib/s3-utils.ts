@@ -73,10 +73,10 @@ export async function generateSignedUrls(
   const signedUrls: string[] = [];
 
   for (const prefix of filePaths) {
-    // 例: logs/team_id=team-alpha/year=2025/month=01/day=01/hour=10/logs-10.jsonl.gz
+    // 例: logs/team_id=team-alpha/year=2025/month=01/day=01/hour=10/logs-10.parquet
     const hourMatch = prefix.match(/hour=(\d{2})/);
     const hour = hourMatch ? hourMatch[1] : "00";
-    const key = `${prefix}logs-${hour}.jsonl.gz`;
+    const key = `${prefix}logs-${hour}.parquet`;
 
     try {
       const command = new GetObjectCommand({
