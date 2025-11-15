@@ -14,6 +14,11 @@ export interface ConversationHistory {
     startDate: string;
     endDate: string;
   };
+  queryResult?: {
+    columns: string[];
+    rows: any[][];
+    totalRows: number;
+  };
 }
 
 const STORAGE_KEY = "llm-log-conversation-history";

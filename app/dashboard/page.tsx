@@ -204,12 +204,20 @@ export default function DashboardPage() {
       sql: history.sql,
       explanation: history.explanation,
     });
-    // クエリ結果は再実行が必要
-    setQueryResult(null);
-    setToast({
-      type: "info",
-      message: "過去の会話を読み込みました。クエリを再実行してください。",
-    });
+    // クエリ結果も復元
+    if (history.queryResult) {
+      setQueryResult(history.queryResult);
+      setToast({
+        type: "success",
+        message: "過去の会話を読み込みました",
+      });
+    } else {
+      setQueryResult(null);
+      setToast({
+        type: "info",
+        message: "過去の会話を読み込みました（結果データなし）",
+      });
+    }
   };
 
   const handleNewConversation = () => {
@@ -280,7 +288,7 @@ export default function DashboardPage() {
         });
       }
 
-      // 会話履歴に保存
+      // 会話履歴に保存（結果も含める）
       if (currentQuestion && generatedSql) {
         const saved = saveConversationHistory({
           question: currentQuestion,
@@ -289,6 +297,11 @@ export default function DashboardPage() {
           resultSummary: generateResultSummary(columns, rows.length),
           teamId: selectedTeamId,
           dateRange: { ...dateRange },
+          queryResult: {
+            columns,
+            rows,
+            totalRows: rows.length,
+          },
         });
         setCurrentHistoryId(saved.id);
       }
