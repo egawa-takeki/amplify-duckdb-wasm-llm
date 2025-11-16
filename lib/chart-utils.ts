@@ -142,14 +142,22 @@ export function detectTimeColumn(columns: string[]): string | null {
 }
 
 /**
- * 数値カラムを検出
+ * 数値カラムを検出（時系列カラムを除外）
  */
 export function detectNumericColumns(
   columns: string[],
   rows: any[][],
 ): string[] {
-  return columns.filter((_, idx) => {
+  // 時系列カラムを特定
+  const timeColumn = detectTimeColumn(columns);
+
+  return columns.filter((col, idx) => {
     if (rows.length === 0) return false;
+
+    // 時系列カラムは除外（X軸専用）
+    if (timeColumn && col === timeColumn) {
+      return false;
+    }
 
     return rows.every((row) => {
       const value = row[idx];
